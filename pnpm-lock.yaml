@@ -5,8 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  lodash: 4.17.19
-  minimist: 1.2.0
+  lodash: 4.17.21
+  minimist: 1.2.6
 
 importers:
 
@@ -15,11 +15,11 @@ importers:
   apps/web/app1:
     dependencies:
       lodash:
-        specifier: 4.17.19
-        version: 4.17.19
+        specifier: 4.17.21
+        version: 4.17.21
       minimist:
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.2.6
+        version: 1.2.6
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -30,11 +30,11 @@ importers:
   apps/web/app2:
     dependencies:
       lodash:
-        specifier: 4.17.19
-        version: 4.17.19
+        specifier: 4.17.21
+        version: 4.17.21
       minimist:
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.2.6
+        version: 1.2.6
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -47,15 +47,15 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  lodash@4.17.19:
-    resolution: {integrity: sha512-JNvd8XER9GQX0v2qJgsaN/mzFCNA5BRe/j8JN9d+tWyGLSodKQHKFicdwNYzWwI3wjRnaKPsGj1XkBjx/F96DQ==}
+  lodash@4.17.21:
+    resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     hasBin: true
 
-  minimist@1.2.0:
-    resolution: {integrity: sha512-7Wl+Jz+IGWuSdgsQEJ4JunV0si/iMhg42MnQQG6h1R6TNeVenp4U9x5CC5v/gYqz/fENLQITAWXidNtVL0NNbw==}
+  minimist@1.2.6:
+    resolution: {integrity: sha512-Jsjnk4bw3YJqYzbdyBiNsPWHPfO++UGG749Cxs6peCu5Xg4nrena6OVxOYxrQTqww0Jmwt+Ref8rggumkTLz9Q==}
 
   react-dom@18.3.1:
     resolution: {integrity: sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==}
@@ -73,13 +73,13 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  lodash@4.17.19: {}
+  lodash@4.17.21: {}
 
   loose-envify@1.4.0:
     dependencies:
       js-tokens: 4.0.0
 
-  minimist@1.2.0: {}
+  minimist@1.2.6: {}
 
   react-dom@18.3.1(react@18.3.1):
     dependencies:
