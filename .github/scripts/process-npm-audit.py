@@ -72,14 +72,25 @@ def parse_vulnerabilities(audit_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         # Improved version detection with fallbacks
         findings = vuln.get('findings', [{}])
         current_version = 'unknown'
+        affected_paths = []
         
         if findings:
             # Priority 1: Try direct version field
             current_version = findings[0].get('version', None)
             
+            # Extract file paths showing where package is used
+            paths = findings[0].get('paths', [])
+            if paths:
+                # Get unique root packages from dependency paths
+                seen_roots = set()
+                for path in paths[:5]:  # Limit to first 5 to avoid spam
+                    root = path.split('>')[0] if '>' in path else path
+                    if root and root not in seen_roots:
+                        affected_paths.append(root)
+                        seen_roots.add(root)
+            
             # Priority 2: Parse from paths if version field missing
             if not current_version or current_version == 'unknown':
-                paths = findings[0].get('paths', [])
                 if paths and '>' in paths[0]:
                     parts = paths[0].split('>')
                     for part in parts:
@@ -109,6 +120,7 @@ def parse_vulnerabilities(audit_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             'title': title,
             'url': url,
             'recommendation': recommendation,
+            'affected_paths': affected_paths,
         })
     
     return vulnerabilities
@@ -189,17 +201,28 @@ def generate_vulnerability_table(
         
         emoji = get_severity_emoji(severity)
         table += f"### {emoji} {severity.title()} Severity ({len(vulns)})\n\n"
-        table += "| Package | Current Version | Fixed Version | CVE | Details |\n"
-        table += "|---------|----------------|---------------|-----|----------|\n"
+        table += "| Package | Affected | Current | Fixed | CVE | Details |\n"
+        table += "|---------|----------|---------|-------|-----|----------|\n"
         
         for v in vulns:
             package = f"`{v['package']}`"
+            
+            # Format affected paths
+            paths = v.get('affected_paths', [])
+            if paths:
+                # Show first 2 paths, indicate if there are more
+                affected = ', '.join(f"`{p}`" for p in paths[:2])
+                if len(paths) > 2:
+                    affected += f" (+{len(paths)-2} more)"
+            else:
+                affected = "—"
+            
             current = v['current_version'] if v['current_version'] != 'unknown' else '❓'
             patched = v['patched_version']
             cve = f"[{v['cve']}]({v['url']})" if v['cve'] != 'N/A' else 'N/A'
-            title = v['title'][:50] + '...' if len(v['title']) > 50 else v['title']
+            title = v['title'][:40] + '...' if len(v['title']) > 40 else v['title']
             
-            table += f"| {package} | {current} | {patched} | {cve} | {title} |\n"
+            table += f"| {package} | {affected} | {current} | {patched} | {cve} | {title} |\n"
         
         table += "\n"
     
@@ -323,7 +346,7 @@ These vulnerabilities don't block CI but should be addressed when possible.
 
 ---
 
-*🤖 Automated scan by {workflow_name} • Run: {run_id} • [Docs](../../docs/ci-cd/npm-vulnerability-scanner.md)*
+*🤖 Automated scan by {workflow_name} • Run: {run_id}*
 """
     
     return comment
