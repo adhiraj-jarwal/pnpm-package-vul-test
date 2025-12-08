@@ -1,0 +1,66 @@
+════════════════════════════════════════════════════════════════
+  🧪 Test Scenario Commands (Copy & Paste)
+════════════════════════════════════════════════════════════════
+
+After you've pushed to GitHub, run these 3 tests:
+
+════════════════════════════════════════════════════════════════
+  TEST 1: Vulnerable Package (Should FAIL CI ❌)
+════════════════════════════════════════════════════════════════
+
+cd "/Users/adhirajjarwal/Desktop/pnpm package/test-project"
+git checkout -b test/vulnerable-package
+sed -i '' 's/"node-forge": "1.3.2"/"node-forge": "1.3.1"/' apps/web/app1/package.json
+pnpm install
+git add -A
+git commit -m "test: introduce vulnerable node-forge version"
+git push -u origin test/vulnerable-package
+
+Then: Go to GitHub and create PR
+Expected: CI FAILS 🔴, PR comment shows vulnerability details
+
+════════════════════════════════════════════════════════════════
+  TEST 2: Non-NPM Change (Should SKIP ✅)
+════════════════════════════════════════════════════════════════
+
+cd "/Users/adhirajjarwal/Desktop/pnpm package/test-project"
+git checkout main
+git pull
+git checkout -b test/non-npm-change
+echo "# Documentation" > DOCS.md
+git add -A
+git commit -m "test: add documentation (non-npm change)"
+git push -u origin test/non-npm-change
+
+Then: Go to GitHub and create PR
+Expected: CI PASSES 🟢, scanner skips (no npm files changed)
+
+════════════════════════════════════════════════════════════════
+  TEST 3: Fix Vulnerability (Should PASS ✅)
+════════════════════════════════════════════════════════════════
+
+cd "/Users/adhirajjarwal/Desktop/pnpm package/test-project"
+git checkout main
+git pull
+git checkout -b test/fix-vulnerability
+sed -i '' 's/"node-forge": "1.3.1"/"node-forge": "1.3.2"/' apps/web/app1/package.json
+pnpm install
+git add -A
+git commit -m "fix: upgrade node-forge to patched version"
+git push -u origin test/fix-vulnerability
+
+Then: Go to GitHub and create PR
+Expected: CI PASSES 🟢, PR comment shows "Scan PASSED"
+
+════════════════════════════════════════════════════════════════
+  📊 Expected Results Summary
+════════════════════════════════════════════════════════════════
+
+Test 1: CI FAILS ❌  → Vulnerability table in PR comment
+Test 2: CI PASSES ✅ → "No npm files changed" message
+Test 3: CI PASSES ✅ → "Scan PASSED" message
+
+════════════════════════════════════════════════════════════════
+
+All 3 tests ready to run! 🚀
+
