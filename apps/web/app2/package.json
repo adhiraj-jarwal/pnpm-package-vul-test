@@ -2,10 +2,11 @@
   "name": "@test/app2",
   "version": "1.0.0",
   "private": true,
-  "description": "Test app 2",
+  "description": "Test app 2 - Admin dashboard",
   "dependencies": {
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "lodash": "4.17.19"
   }
 }
 

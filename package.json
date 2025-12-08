@@ -2,11 +2,11 @@
   "name": "test-vulnerability-scanner",
   "version": "1.0.0",
   "private": true,
-  "description": "Test project for npm vulnerability scanner",
+  "description": "Test project for npm vulnerability scanner - demonstrates real-world scenarios",
   "scripts": {},
   "pnpm": {
     "overrides": {
-      "node-forge": "1.3.2"
+      "lodash": "4.17.19"
     }
   }
 }
