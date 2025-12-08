@@ -94,8 +94,8 @@ jobs:
           # Configure minimum severity that fails CI
           # Valid options: CRITICAL, HIGH, MODERATE, LOW, INFO, UNKNOWN
           # Script default (when not set) is INFO
-          # Recommended: Start with LOW (strict), adjust per-team as needed
-          MIN_FAIL_SEVERITY: LOW
+          # Fail on MODERATE and above (CRITICAL, HIGH, MODERATE)
+          MIN_FAIL_SEVERITY: MODERATE
 
   # ========== Scheduled audit on main branch ==========
   # Catches NEW vulnerabilities in already-merged code
