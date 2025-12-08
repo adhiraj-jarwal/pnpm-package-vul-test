@@ -6,7 +6,8 @@
   "scripts": {},
   "pnpm": {
     "overrides": {
-      "lodash": "4.17.19"
+      "lodash": "4.17.19",
+      "minimist": "1.2.0"
     }
   }
 }

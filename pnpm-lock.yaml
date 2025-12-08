@@ -6,6 +6,7 @@ settings:
 
 overrides:
   lodash: 4.17.19
+  minimist: 1.2.0
 
 importers:
 
@@ -16,6 +17,9 @@ importers:
       lodash:
         specifier: 4.17.19
         version: 4.17.19
+      minimist:
+        specifier: 1.2.0
+        version: 1.2.0
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -28,6 +32,9 @@ importers:
       lodash:
         specifier: 4.17.19
         version: 4.17.19
+      minimist:
+        specifier: 1.2.0
+        version: 1.2.0
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -46,6 +53,9 @@ packages:
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     hasBin: true
+
+  minimist@1.2.0:
+    resolution: {integrity: sha512-7Wl+Jz+IGWuSdgsQEJ4JunV0si/iMhg42MnQQG6h1R6TNeVenp4U9x5CC5v/gYqz/fENLQITAWXidNtVL0NNbw==}
 
   react-dom@18.3.1:
     resolution: {integrity: sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==}
@@ -68,6 +78,8 @@ snapshots:
   loose-envify@1.4.0:
     dependencies:
       js-tokens: 4.0.0
+
+  minimist@1.2.0: {}
 
   react-dom@18.3.1(react@18.3.1):
     dependencies:
