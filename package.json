@@ -1,0 +1,15 @@
+{
+  "name": "test-vulnerability-scanner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Test project for npm vulnerability scanner",
+  "scripts": {
+    "install": "pnpm install"
+  },
+  "pnpm": {
+    "overrides": {
+      "node-forge": "1.3.2"
+    }
+  }
+}
+

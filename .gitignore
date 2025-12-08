@@ -1,0 +1,8 @@
+node_modules/
+pnpm-lock.yaml
+.DS_Store
+audit-results.json
+vulnerability-comment.md
+audit-report.txt
+issue-body.md
+

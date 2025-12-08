@@ -1,0 +1,231 @@
+name: Test NPM Vulnerability Scanner
+
+on:
+  pull_request:
+    branches: ['*']
+  push:
+    branches: ['main']
+  workflow_dispatch:
+  schedule:
+    # Weekly npm vulnerability scan on main (Monday 3 AM UTC)
+    - cron: '0 3 * * 1'
+
+jobs:
+  # ========== PR-triggered scan ==========
+  scan-npm-vulnerabilities:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          show-progress: false
+
+      # Detect if npm dependency files changed
+      - name: Check for npm dependency changes
+        id: npm-changes
+        uses: tj-actions/changed-files@v46
+        with:
+          files: |
+            **/package.json
+            **/pnpm-lock.yaml
+            pnpm-workspace.yaml
+
+      # Skip if no npm changes
+      - name: Skip scan - no npm changes detected
+        if: steps.npm-changes.outputs.any_changed != 'true'
+        run: |
+          echo "✅ No npm dependency files changed in this PR"
+          echo "Skipping vulnerability scan - this PR is safe from npm vulnerability perspective"
+          echo ""
+          echo "Changed files: ${{ steps.npm-changes.outputs.all_changed_files }}"
+
+      # Run scan only if npm files changed
+      - name: Setup Node.js
+        if: steps.npm-changes.outputs.any_changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        if: steps.npm-changes.outputs.any_changed == 'true'
+        run: npm install -g pnpm@9
+
+      - name: Install dependencies
+        if: steps.npm-changes.outputs.any_changed == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Run pnpm audit
+        if: steps.npm-changes.outputs.any_changed == 'true'
+        id: audit
+        continue-on-error: true
+        run: |
+          echo "🔍 Running pnpm audit on npm dependencies..."
+          pnpm audit --audit-level=low --json > audit-results.json || true
+          echo "Audit completed"
+
+      - name: Setup Python for processing
+        if: steps.npm-changes.outputs.any_changed == 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # Ensure GitHub CLI is available
+      - name: Ensure GitHub CLI is available
+        if: steps.npm-changes.outputs.any_changed == 'true'
+        run: |
+          if ! command -v gh &> /dev/null; then
+            echo "⚠️  GitHub CLI not found, installing..."
+            sudo apt-get update && sudo apt-get install -y gh || true
+          fi
+          gh --version
+
+      - name: Process audit results and post comment
+        if: steps.npm-changes.outputs.any_changed == 'true'
+        run: |
+          python .github/scripts/process-npm-audit.py
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Configure minimum severity that fails CI
+          # Valid options: CRITICAL, HIGH, MODERATE, LOW, INFO, UNKNOWN
+          # Script default (when not set) is INFO
+          # Recommended: Start with LOW (strict), adjust per-team as needed
+          MIN_FAIL_SEVERITY: LOW
+
+  # ========== Scheduled audit on main branch ==========
+  # Catches NEW vulnerabilities in already-merged code
+  # Runs weekly on Monday at 3 AM UTC (configure in workflow triggers)
+  scan-npm-vulnerabilities-scheduled:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      issues: write  # For creating issues with findings
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v3
+        with:
+          ref: main
+          show-progress: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        run: npm install -g pnpm@9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run pnpm audit
+        id: audit
+        continue-on-error: true
+        run: |
+          echo "🔍 Running scheduled pnpm audit on main branch..."
+          pnpm audit --audit-level=low --json > audit-results.json || true
+          echo "Audit completed"
+
+      - name: Setup Python for processing
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Ensure GitHub CLI is available
+        run: |
+          if ! command -v gh &> /dev/null; then
+            echo "⚠️  GitHub CLI not found, installing..."
+            sudo apt-get update && sudo apt-get install -y gh || true
+          fi
+          gh --version
+
+      - name: Process audit results
+        id: process
+        run: |
+          python .github/scripts/process-npm-audit.py > audit-report.txt 2>&1 || true
+          echo "Report generated"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Less strict for scheduled scans: fail classification only for HIGH/CRITICAL,
+          # but we ignore exit code with `|| true` so the job never fails on schedule.
+          MIN_FAIL_SEVERITY: HIGH
+
+      - name: Create issue if vulnerabilities found
+        if: always()
+        run: |
+          if [ -f audit-results.json ]; then
+            # Check if there are any vulnerabilities (based on advisories count)
+            vuln_count=$(python -c "import json; data=json.load(open('audit-results.json')); print(len(data.get('advisories', {})))")
+            
+            if [ "$vuln_count" -gt "0" ]; then
+              echo "Found $vuln_count vulnerabilities on main branch"
+              
+              # Create issue with findings
+              cat > issue-body.md <<EOF
+          ## 🚨 Weekly npm Vulnerability Scan: Vulnerabilities Detected
+
+          The scheduled vulnerability scan found **$vuln_count** vulnerabilities in main branch.
+
+          ### 📋 Details
+
+          \`\`\`
+          $(cat audit-report.txt)
+          \`\`\`
+
+          ### 🔧 Next Steps
+
+          1. Review the vulnerabilities listed above
+          2. Create PRs to upgrade affected packages
+          3. Test thoroughly before merging
+          4. Close this issue once resolved
+
+          ### ℹ️ Context
+
+          - **Branch:** main
+          - **Scan Date:** $(date -u +"%Y-%m-%d %H:%M UTC")
+          - **Workflow:** ${{ github.workflow }}
+          - **Run:** ${{ github.run_id }}
+
+          ---
+
+          *🤖 Automated weekly scan*
+          EOF
+              
+              # Search for existing open issue with security/npm-vulnerabilities labels
+              existing_issue=$(gh issue list --label "security,npm-vulnerabilities" --state open --limit 1 --json number --jq '.[0].number' || echo "")
+              
+              if [ -n "$existing_issue" ]; then
+                echo "Updating existing issue #$existing_issue"
+                gh issue comment "$existing_issue" --body-file issue-body.md
+              else
+                echo "Creating new issue"
+                gh issue create \
+                  --title "🚨 npm Vulnerabilities Detected on Main Branch ($(date +%Y-%m-%d))" \
+                  --body-file issue-body.md \
+                  --label "security,npm-vulnerabilities,automated" \
+                  --assignee "@me"
+              fi
+            else
+              echo "✅ No vulnerabilities found on main branch"
+            fi
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upload audit results as artifact for later review
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results-${{ github.run_id }}
+          path: |
+            audit-results.json
+            audit-report.txt
+          retention-days: 30
+
