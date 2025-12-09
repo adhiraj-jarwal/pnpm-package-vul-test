@@ -20,15 +20,37 @@ BOT_MARKER = "<!-- go-audit-bot:v1 -->"
 SEVERITY_LEVELS = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW', 'INFO', 'UNKNOWN']
 
 def load_audit_results() -> Dict[str, Any]:
-    """Load govulncheck JSON results."""
+    """Load govulncheck JSON results (handles NDJSON format)."""
     try:
         with open('go-audit-results.json', 'r') as f:
-            return json.load(f)
+            content = f.read().strip()
+            
+            # Handle empty file
+            if not content:
+                return {'Vulns': []}
+            
+            # Try single JSON object first
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                # Handle NDJSON format (multiple JSON objects, one per line)
+                vulns = []
+                for line in content.split('\n'):
+                    if line.strip():
+                        try:
+                            obj = json.loads(line)
+                            # govulncheck outputs different message types
+                            # We only care about "finding" type which contains vulnerability data
+                            if obj.get('finding'):
+                                vulns.append(obj['finding'])
+                        except json.JSONDecodeError:
+                            continue
+                return {'Vulns': vulns}
     except FileNotFoundError:
         print("❌ Error: go-audit-results.json not found")
         sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"❌ Error parsing audit results: {e}")
+    except Exception as e:
+        print(f"❌ Error loading audit results: {e}")
         sys.exit(1)
 
 def get_min_fail_severity() -> str:
