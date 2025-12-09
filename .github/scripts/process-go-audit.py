@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Process pnpm audit results and create PR comment with vulnerability details.
+Process Go govulncheck results and create PR comment with vulnerability details.
 Exits with code 1 if vulnerabilities are found (fails CI).
+
+Uses govulncheck - official Go vulnerability scanner
 """
 
 import json
@@ -11,104 +13,128 @@ import subprocess
 from typing import Dict, List, Any, Tuple
 
 # Bot identification marker (hidden in HTML comment)
-BOT_MARKER = "<!-- mercor-npm-audit-bot:v1 -->"
+BOT_MARKER = "<!-- go-audit-bot:v1 -->"
 
 # Severity levels in order (lower index = more severe)
+# Go uses: HIGH, MODERATE, LOW
 SEVERITY_LEVELS = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW', 'INFO', 'UNKNOWN']
 
 def load_audit_results() -> Dict[str, Any]:
-    """Load pnpm audit JSON results."""
+    """Load govulncheck JSON results."""
     try:
-        with open('audit-results.json', 'r') as f:
+        with open('go-audit-results.json', 'r') as f:
             return json.load(f)
     except FileNotFoundError:
-        print("❌ Error: audit-results.json not found")
+        print("❌ Error: go-audit-results.json not found")
         sys.exit(1)
     except json.JSONDecodeError as e:
         print(f"❌ Error parsing audit results: {e}")
         sys.exit(1)
 
 def get_min_fail_severity() -> str:
-    """
-    Get minimum severity level that should fail CI.
-    Default in code is INFO (fail on all known severities except UNKNOWN),
-    but in CI you can override via MIN_FAIL_SEVERITY env var.
-    Valid values: CRITICAL, HIGH, MODERATE, LOW, INFO, UNKNOWN
-    """
-    min_severity = os.getenv('MIN_FAIL_SEVERITY', 'INFO').upper()
+    """Get minimum severity level that should fail CI."""
+    min_severity = os.getenv('MIN_FAIL_SEVERITY', 'MODERATE').upper()
     if min_severity not in SEVERITY_LEVELS:
-        print(f"⚠️  Invalid MIN_FAIL_SEVERITY '{min_severity}', defaulting to INFO")
-        return 'INFO'
+        print(f"⚠️  Invalid MIN_FAIL_SEVERITY '{min_severity}', defaulting to MODERATE")
+        return 'MODERATE'
     return min_severity
 
 def parse_vulnerabilities(audit_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Extract vulnerability information from audit data."""
+    """Extract vulnerability information from govulncheck data."""
     vulnerabilities: List[Dict[str, Any]] = []
     
-    # Ensure we actually have advisories; this is format-dependent
-    if 'advisories' not in audit_data:
-        print("ℹ️  audit-results.json has no 'advisories' key; parser may not support this format")
+    # govulncheck output format
+    vulns = audit_data.get('Vulns', audit_data.get('vulns', []))
+    
+    if not vulns:
+        print("✅ No vulnerabilities found in Go modules")
         return []
     
-    # npm/pnpm audit v6–v9 style format
-    advisories = audit_data.get('advisories') or {}
-    
-    if not advisories:
-        print("✅ No vulnerabilities found in audit results (no advisories)")
-        return []
-    
-    for advisory_id, vuln in advisories.items():
-        # Extract basic info
-        package_name = vuln.get('module_name', vuln.get('name', 'unknown'))
-        raw_severity = vuln.get('severity', 'unknown')
-        severity_upper = str(raw_severity).upper()
-        normalized_severity = severity_upper if severity_upper in SEVERITY_LEVELS else 'UNKNOWN'
-        is_unknown_severity = severity_upper not in SEVERITY_LEVELS
+    for vuln in vulns:
+        # Extract package and module info
+        module_path = vuln.get('ModulePath', vuln.get('module', 'unknown'))
+        package_path = vuln.get('PkgPath', vuln.get('package', module_path))
         
-        title = vuln.get('title', 'No title available')
-        cves = vuln.get('cves', [])
-        cve = cves[0] if cves else 'N/A'
+        # Get OSV (Open Source Vulnerability) details
+        osv = vuln.get('OSV', {})
         
-        # Improved version detection with fallbacks
-        findings = vuln.get('findings', [{}])
-        current_version = 'unknown'
+        vuln_id = osv.get('id', vuln.get('ID', 'UNKNOWN'))
+        summary = osv.get('summary', vuln.get('Details', 'No description available'))
         
-        if findings:
-            # Priority 1: Try direct version field
-            current_version = findings[0].get('version', None)
-            
-            # Priority 2: Parse from paths if version field missing
-            if not current_version or current_version == 'unknown':
-                paths = findings[0].get('paths', [])
-                if paths and '>' in paths[0]:
-                    parts = paths[0].split('>')
-                    for part in parts:
-                        if '@' in part and package_name in part:
-                            try:
-                                current_version = part.split('@')[-1]
-                                break
-                            except IndexError:
-                                pass
+        # Get current version
+        current_version = vuln.get('CurrentVersion', vuln.get('found_version', 'unknown'))
         
-        # Get patched version
-        patched_versions = vuln.get('patched_versions', 'No fix available')
-        recommendation = vuln.get('recommendation', '')
+        # Get fixed version
+        fixed = osv.get('fixed', vuln.get('FixedVersion', ''))
+        if fixed:
+            patched_version = f">={fixed}"
+        else:
+            # Try to extract from affected ranges
+            affected = osv.get('affected', [])
+            if affected and len(affected) > 0:
+                ranges = affected[0].get('ranges', [])
+                if ranges and len(ranges) > 0:
+                    events = ranges[0].get('events', [])
+                    for event in events:
+                        if 'fixed' in event:
+                            patched_version = f">={event['fixed']}"
+                            break
+                    else:
+                        patched_version = "No fix available"
+                else:
+                    patched_version = "No fix available"
+            else:
+                patched_version = "No fix available"
         
-        # Get URL (prefer provided, fallback to npm advisory link)
-        url = vuln.get('url') or f'https://www.npmjs.com/advisories/{advisory_id}'
+        # Map severity (govulncheck doesn't always provide severity)
+        # We infer from database severity or default to MODERATE
+        raw_severity = osv.get('database_specific', {}).get('severity', 'MODERATE')
+        raw_severity = str(raw_severity).upper()
+        
+        # Map common severity terms
+        if 'CRITICAL' in raw_severity or 'SEVERE' in raw_severity:
+            normalized_severity = 'CRITICAL'
+        elif 'HIGH' in raw_severity:
+            normalized_severity = 'HIGH'
+        elif 'MEDIUM' in raw_severity or 'MODERATE' in raw_severity:
+            normalized_severity = 'MODERATE'
+        elif 'LOW' in raw_severity:
+            normalized_severity = 'LOW'
+        else:
+            normalized_severity = 'MODERATE'  # Default to MODERATE for Go
+        
+        # Get URL
+        url = ''
+        references = osv.get('references', [])
+        for ref in references:
+            if ref.get('type') == 'ADVISORY' or ref.get('type') == 'WEB':
+                url = ref.get('url', '')
+                break
+        if not url:
+            url = f'https://pkg.go.dev/vuln/{vuln_id}'
+        
+        # Get affected files (go.mod location)
+        affected_paths = []
+        if os.path.exists('go.mod'):
+            affected_paths.append('go.mod')
+        
+        # Check if vulnerability is actually called (more severe if called)
+        is_called = vuln.get('IsCalled', vuln.get('called', False))
+        if is_called and normalized_severity == 'MODERATE':
+            # Upgrade severity if vulnerability is actually used in code
+            normalized_severity = 'HIGH'
         
         vulnerabilities.append({
-            'id': advisory_id,
-            'package': package_name,
-            'current_version': current_version if current_version else 'unknown',
-            'patched_version': patched_versions,
+            'package': package_path,
+            'module': module_path,
+            'current_version': current_version,
+            'patched_version': patched_version,
             'severity': normalized_severity,
-            'raw_severity': raw_severity,
-            'unknown_severity': is_unknown_severity,
-            'cve': cve,
-            'title': title,
+            'cve': vuln_id,
+            'title': summary,
             'url': url,
-            'recommendation': recommendation,
+            'affected_paths': affected_paths,
+            'is_called': is_called,
         })
     
     return vulnerabilities
@@ -117,27 +143,13 @@ def categorize_vulnerabilities(
     vulnerabilities: List[Dict[str, Any]],
     min_fail_severity: str
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """
-    Split vulnerabilities into fail_vulns and warn_vulns based on min_fail_severity.
-    Rules:
-    - Any vulnerability with a truly unknown severity string (not mapping to our known levels)
-      is treated as FAIL (fail-safe).
-    - Otherwise, we compare the normalized severity against MIN_FAIL_SEVERITY.
-    
-    Returns:
-        (fail_vulns, warn_vulns) tuple
-    """
+    """Split vulnerabilities into fail_vulns and warn_vulns."""
     min_severity_index = SEVERITY_LEVELS.index(min_fail_severity)
     
     fail_vulns: List[Dict[str, Any]] = []
     warn_vulns: List[Dict[str, Any]] = []
     
     for vuln in vulnerabilities:
-        # If parser marked the severity as unknown/unrecognized, fail-safe
-        if vuln.get('unknown_severity'):
-            fail_vulns.append(vuln)
-            continue
-        
         severity = vuln['severity']
         try:
             severity_index = SEVERITY_LEVELS.index(severity)
@@ -146,7 +158,6 @@ def categorize_vulnerabilities(
             else:
                 warn_vulns.append(vuln)
         except ValueError:
-            # Shouldn't normally happen because we normalize, but fail-safe just in case
             fail_vulns.append(vuln)
     
     return fail_vulns, warn_vulns
@@ -171,7 +182,6 @@ def generate_vulnerability_table(
     if not vulnerabilities:
         return ""
     
-    # Group by severity
     grouped: Dict[str, List[Dict[str, Any]]] = {severity: [] for severity in severity_order}
     grouped.setdefault('UNKNOWN', [])
     
@@ -189,17 +199,19 @@ def generate_vulnerability_table(
         
         emoji = get_severity_emoji(severity)
         table += f"### {emoji} {severity.title()} Severity ({len(vulns)})\n\n"
-        table += "| Package | Current Version | Fixed Version | CVE | Details |\n"
-        table += "|---------|----------------|---------------|-----|----------|\n"
+        table += "| Module | Package | Current | Fixed | CVE/ID | Used in Code | Details |\n"
+        table += "|--------|---------|---------|-------|--------|--------------|----------|\n"
         
         for v in vulns:
-            package = f"`{v['package']}`"
+            module = f"`{v['module']}`"
+            package = f"`{v['package']}`" if v['package'] != v['module'] else "—"
             current = v['current_version'] if v['current_version'] != 'unknown' else '❓'
             patched = v['patched_version']
-            cve = f"[{v['cve']}]({v['url']})" if v['cve'] != 'N/A' else 'N/A'
-            title = v['title'][:50] + '...' if len(v['title']) > 50 else v['title']
+            cve = f"[{v['cve']}]({v['url']})" if v['url'] else v['cve']
+            is_called = "✅ Yes" if v.get('is_called') else "❌ No"
+            title = v['title'][:35] + '...' if len(v['title']) > 35 else v['title']
             
-            table += f"| {package} | {current} | {patched} | {cve} | {title} |\n"
+            table += f"| {module} | {package} | {current} | {patched} | {cve} | {is_called} | {title} |\n"
         
         table += "\n"
     
@@ -213,14 +225,14 @@ def generate_pr_comment(
     """Generate formatted PR comment with vulnerability details."""
     
     run_id = os.getenv('GITHUB_RUN_ID', 'local')
-    workflow_name = os.getenv('GITHUB_WORKFLOW', 'npm-audit')
+    workflow_name = os.getenv('GITHUB_WORKFLOW', 'go-audit')
     
     # Success case
     if not fail_vulns and not warn_vulns:
         return f"""{BOT_MARKER}
-## ✅ npm Vulnerability Scan: PASSED
+## ✅ Go Vulnerability Scan: PASSED
 
-No vulnerabilities detected in npm dependencies.
+No vulnerabilities detected in Go modules.
 
 ---
 *🤖 Automated scan by {workflow_name} • Run: {run_id}*
@@ -234,7 +246,7 @@ No vulnerabilities detected in npm dependencies.
     if fail_vulns:
         fail_plural = "y" if fail_count == 1 else "ies"
         comment = f"""{BOT_MARKER}
-## 🚨 npm Vulnerability Scan: FAILED
+## 🚨 Go Vulnerability Scan: FAILED
 
 **❌ Found {fail_count} vulnerabilit{fail_plural} that must be fixed** (>= {min_fail_severity.title()} severity)
 """
@@ -243,15 +255,13 @@ No vulnerabilities detected in npm dependencies.
             comment += f"**⚠️ Found {warn_count} additional lower-severity vulnerabilit{warn_plural}** (informational)\n"
         
         comment += """
-This PR modifies npm dependency files and contains security vulnerabilities that must be addressed before merging.
+This PR modifies Go module files and contains security vulnerabilities that must be addressed before merging.
 
 ---
 
 """
-        # Add fail vulnerabilities table
         comment += generate_vulnerability_table(fail_vulns, SEVERITY_LEVELS)
         
-        # Add warnings table if present
         if warn_vulns:
             comment += """---
 
@@ -263,10 +273,9 @@ These vulnerabilities are below the fail threshold but should be addressed when 
             comment += generate_vulnerability_table(warn_vulns, SEVERITY_LEVELS)
     
     else:
-        # Only warnings, no failures
         warn_plural = "y" if warn_count == 1 else "ies"
         comment = f"""{BOT_MARKER}
-## ⚠️ npm Vulnerability Scan: WARNING
+## ⚠️ Go Vulnerability Scan: WARNING
 
 **Found {warn_count} low-severity vulnerabilit{warn_plural}** (below {min_fail_severity.title()} threshold)
 
@@ -282,36 +291,34 @@ These vulnerabilities don't block CI but should be addressed when possible.
 
 ### 🔧 How to Fix
 
-1. **Update the vulnerable packages:**
+1. **Update the vulnerable modules:**
    ```bash
-   # For direct dependencies in package.json
-   pnpm update <package-name>@<fixed-version>
+   # Update specific module
+   go get <module-path>@<fixed-version>
    
-   # For transitive dependencies, add to pnpm overrides in root package.json
-   # "pnpm": {{
-   #   "overrides": {{
-   #     "<package-name>": "<fixed-version>"
-   #   }}
-   # }}
+   # Update all modules to latest
+   go get -u ./...
+   
+   # Tidy dependencies
+   go mod tidy
    ```
 
-2. **Regenerate lockfiles:**
+2. **Verify fixes:**
    ```bash
-   pnpm install
+   # Re-run vulnerability scan
+   govulncheck ./...
+   
+   # Run tests
+   go test ./...
    ```
 
-3. **Test your changes:**
-   ```bash
-   pnpm build
-   pnpm test
-   ```
-
-4. **Push and re-run CI**
+3. **Push and re-run CI**
 
 ### ℹ️ Need Help?
 
-- 📖 [npm security docs](https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities)
-- 🔍 Check CVE links above for details
+- 📖 [Go security policy](https://go.dev/security/)
+- 🔍 [Go vulnerability database](https://vuln.go.dev/)
+- 🔗 Check CVE links above for details
 - 💬 Ask in #engineering-help
 
 ### 🎛️ Scanner Configuration
@@ -321,20 +328,17 @@ These vulnerabilities don't block CI but should be addressed when possible.
 - **Failing CI:** {fail_count}
 - **Informational:** {warn_count}
 
+**Note:** Vulnerabilities marked as "Used in Code: ✅ Yes" are actually called in your codebase and should be prioritized.
+
 ---
 
-*🤖 Automated scan by {workflow_name} • Run: {run_id} • [Docs](../../docs/ci-cd/npm-vulnerability-scanner.md)*
+*🤖 Automated scan by {workflow_name} • Run: {run_id}*
 """
     
     return comment
 
 def find_existing_comment(pr_number: str) -> str:
-    """
-    Find existing bot comment in PR.
-    
-    Returns:
-        Comment ID if found, empty string otherwise
-    """
+    """Find existing bot comment in PR."""
     try:
         result = subprocess.run(
             [
@@ -366,7 +370,6 @@ def post_pr_comment(comment: str):
         print("=" * 80)
         return
     
-    # Check if gh CLI is available
     try:
         subprocess.run(['gh', '--version'], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
@@ -376,16 +379,13 @@ def post_pr_comment(comment: str):
         print(comment)
         return
     
-    # Write comment to file
     with open('vulnerability-comment.md', 'w') as f:
         f.write(comment)
     
-    # Try to find and update existing comment
     existing_comment_id = find_existing_comment(pr_number)
     
     try:
         if existing_comment_id:
-            # Update existing comment
             subprocess.run(
                 [
                     'gh',
@@ -400,7 +400,6 @@ def post_pr_comment(comment: str):
             )
             print(f"✅ Updated existing comment on PR #{pr_number}")
         else:
-            # Create new comment
             subprocess.run(
                 ['gh', 'pr', 'comment', pr_number, '--body-file', 'vulnerability-comment.md'],
                 capture_output=True,
@@ -415,37 +414,31 @@ def post_pr_comment(comment: str):
 
 def main():
     """Main execution function."""
-    print("🔍 Processing npm vulnerability scan results...\n")
+    print("🔍 Processing Go vulnerability scan results...\n")
     
-    # Load configuration
     min_fail_severity = get_min_fail_severity()
     print(f"📋 Configuration: MIN_FAIL_SEVERITY = {min_fail_severity}")
     
-    # Load and parse results
     audit_data = load_audit_results()
     vulnerabilities = parse_vulnerabilities(audit_data)
     
-    # Categorize vulnerabilities
     fail_vulns, warn_vulns = categorize_vulnerabilities(vulnerabilities, min_fail_severity)
     
-    # Generate comment
     comment = generate_pr_comment(fail_vulns, warn_vulns, min_fail_severity)
     
-    # Post comment to PR
     post_pr_comment(comment)
     
-    # Exit with appropriate code
     if fail_vulns:
-        print(f"\n❌ FAILURE: Found {len(fail_vulns)} vulnerabilit{'y' if len(fail_vulns) == 1 else 'ies'} >= {min_fail_severity}")
+        print(f"\n❌ FAILURE: Found {len(fail_vulns)} Go vulnerabilit{'y' if len(fail_vulns) == 1 else 'ies'} >= {min_fail_severity}")
         print(f"ℹ️  Found {len(warn_vulns)} additional lower-severity vulnerabilities (informational)")
         print("CI will fail to prevent merging vulnerable dependencies")
         sys.exit(1)
     elif warn_vulns:
-        print(f"\n⚠️  WARNING: Found {len(warn_vulns)} vulnerabilit{'y' if len(warn_vulns) == 1 else 'ies'} below {min_fail_severity} threshold")
+        print(f"\n⚠️  WARNING: Found {len(warn_vulns)} Go vulnerabilit{'y' if len(warn_vulns) == 1 else 'ies'} below {min_fail_severity} threshold")
         print("CI will pass but vulnerabilities should be addressed")
         sys.exit(0)
     else:
-        print("\n✅ SUCCESS: No vulnerabilities found")
+        print("\n✅ SUCCESS: No Go vulnerabilities found")
         sys.exit(0)
 
 if __name__ == '__main__':

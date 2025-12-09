@@ -1,9 +1,22 @@
 {
-  "name": "test-vulnerability-scanner",
+  "name": "github-vulnerabilities-detection",
   "version": "1.0.0",
   "private": true,
-  "description": "Test project for npm vulnerability scanner - demonstrates real-world scenarios",
-  "scripts": {},
+  "description": "Multi-language vulnerability detection for GitHub Actions - supports npm/pnpm, Python/UV, and Go",
+  "keywords": [
+    "security",
+    "vulnerability-scanner",
+    "github-actions",
+    "npm-audit",
+    "pip-audit",
+    "govulncheck",
+    "dependency-scanner"
+  ],
+  "scripts": {
+    "test:npm": "pnpm audit",
+    "test:python": "pip-audit --format json || true",
+    "test:go": "govulncheck ./... || true"
+  },
   "pnpm": {
     "overrides": {
       "lodash": "4.17.19",

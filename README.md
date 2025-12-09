@@ -1,287 +1,590 @@
-# NPM Vulnerability Scanner - Comprehensive Test Suite
+# 🔒 GitHub Vulnerabilities Detection
 
-Test your vulnerability scanner with **4 realistic scenarios** that demonstrate production security patterns.
+**Multi-language vulnerability scanner for GitHub Actions**
+
+Automatically detect and block vulnerable dependencies in **npm/pnpm**, **Python (pip/uv/poetry)**, and **Go** projects.
+
+**Version**: 2.0.0 | **Updated**: December 9, 2024
 
 ---
 
-## 📋 Current Setup (Main Branch)
+## 🎯 What This Does
 
+- ✅ **Scans 3 package ecosystems**: npm/pnpm, Python, Go
+- ✅ **Posts PR comments** with vulnerability details and fix instructions
+- ✅ **Blocks vulnerable PRs** from merging (configurable severity)
+- ✅ **Weekly scans** on main branch with GitHub issue alerts
+- ✅ **Smart detection** - only runs when dependency files change
+- ✅ **Beautiful reports** with severity emojis (🔴🟠🟡🔵ℹ️), CVE links
+
+---
+
+## ⚡ Quick Start (5 minutes)
+
+### 1. Copy Files
 ```bash
-Status: VULNERABLE (intentionally for testing)
-Package: lodash 4.17.19
-Workspaces: app1 (E-commerce) + app2 (Admin)
-Known Issues: Prototype Pollution (CVE-2020-8203)
-Scanner Config: Fail on CRITICAL, HIGH, MODERATE
+# Navigate to your repo
+cd /path/to/your/repository
+
+# Copy workflow
+mkdir -p .github/workflows
+cp vulnerability-scan.yml .github/workflows/
+
+# Copy scanner scripts
+mkdir -p .github/scripts
+cp .github/scripts/*.py .github/scripts/
+chmod +x .github/scripts/*.py
 ```
 
-**This mirrors real-world scenarios where legacy code has vulnerabilities.**
-
----
-
-## 🧪 Test Scenarios
-
-### **Test 1: Non-Package Change** ✅ (Skip Scan)
-
-**Scenario:** Update documentation, no dependency changes  
-**Real-world:** Daily doc updates, README changes, config tweaks
-
+### 2. Test It
 ```bash
-cd "/Users/adhirajjarwal/Desktop/pnpm package/test-project"
-git checkout -b test/docs-update
+# Create test branch
+git checkout -b test/scanner
 
-cat > CHANGELOG.md << 'EOF'
-# Changelog
+# Add vulnerable npm package
+cd your-app-folder
+pnpm add lodash@4.17.19  # or: npm install lodash@4.17.19
 
-## [1.1.0] - 2024-12-08
-### Added
-- Improved API documentation
-- Enhanced error handling
+# Commit and push
+git add package.json *lock.yaml
+git commit -m "test: add vulnerable package"
+git push -u origin test/scanner
 
-## [1.0.0] - 2024-12-01
-### Initial
-- Initial release
-EOF
+# Create PR
+gh pr create --title "Test scanner" --body "Testing"
 
-git add CHANGELOG.md
-git commit -m "docs: add changelog"
-git push -u origin test/docs-update
+# Expected: ❌ CI fails, bot posts comment with CVE-2020-8203
 ```
 
-**Expected:**
-- ✅ CI PASSES (7-10s)
-- 💬 Message: "No npm files changed"
-- ⏭️ Scanner SKIPS entirely
-- ✅ Merge allowed
-
----
-
-### **Test 2: "Upgrade" to Still-Vulnerable Version** ❌ (Catches Risk!)
-
-**Scenario:** Developer upgrades lodash 4.17.19 → 4.17.20 (STILL VULNERABLE!)  
-**Real-world:** Django 5.1.4 → 5.1.10 when patch requires 5.1.15  
-**This is THE most important test** - catches incomplete security fixes!
-
+### 3. Fix It
 ```bash
-cd "/Users/adhirajjarwal/Desktop/pnpm package/test-project"
-git checkout main
-git checkout -b test/incomplete-security-fix
+# Upgrade to safe version
+pnpm update lodash@4.17.21  # or: npm install lodash@4.17.21
 
-# Upgrade but not to patched version
-sed -i '' 's/"lodash": "4.17.19"/"lodash": "4.17.20"/' apps/web/app1/package.json
-sed -i '' 's/"lodash": "4.17.19"/"lodash": "4.17.20"/' apps/web/app2/package.json
-sed -i '' 's/"lodash": "4.17.19"/"lodash": "4.17.20"/' package.json
+git add package.json *lock.yaml
+git commit -m "fix: upgrade lodash"
+git push
 
-pnpm install
-git add -A
-git commit -m "chore: upgrade lodash to 4.17.20 (security update)"
-git push -u origin test/incomplete-security-fix
-```
-
-**Expected:**
-- ❌ CI FAILS (30-40s)
-- 🤖 Bot posts vulnerability table:
-  - **Package:** lodash
-  - **Affected:** @test/app1, @test/app2
-  - **Current:** 4.17.20
-  - **Fixed:** >=4.17.21
-  - **CVE:** CVE-2020-8203
-  - **Severity:** HIGH
-- 🚫 Merge BLOCKED
-- **Shows "Affected" column with both workspaces!**
-
----
-
-### **Test 3: Proper Security Fix** ✅ (Success Path)
-
-**Scenario:** Upgrade to actual patched version lodash 4.17.21  
-**Real-world:** Completing the security fix properly
-
-```bash
-cd "/Users/adhirajjarwal/Desktop/pnpm package/test-project"
-git checkout main
-git checkout -b test/security-fix-complete
-
-# Upgrade to patched version
-sed -i '' 's/"lodash": "4.17.19"/"lodash": "4.17.21"/' apps/web/app1/package.json
-sed -i '' 's/"lodash": "4.17.19"/"lodash": "4.17.21"/' apps/web/app2/package.json
-sed -i '' 's/"lodash": "4.17.19"/"lodash": "4.17.21"/' package.json
-
-pnpm install
-git add -A
-git commit -m "fix: upgrade lodash to 4.17.21 (security patch)"
-git push -u origin test/security-fix-complete
-```
-
-**Expected:**
-- ✅ CI PASSES (30-40s)
-- 🤖 Bot posts success message:
-  - "✅ npm Vulnerability Scan: PASSED"
-  - "No vulnerabilities detected"
-- ✅ Merge allowed
-
----
-
-### **Test 4: Mixed Dependencies** 🎯 (Advanced Scenario)
-
-**Scenario:** Add multiple packages, some safe, some vulnerable  
-**Real-world:** New feature adds several dependencies at once
-
-```bash
-cd "/Users/adhirajjarwal/Desktop/pnpm package/test-project"
-git checkout main
-git checkout -b test/mixed-dependencies
-
-# Add to app1: safe axios + vulnerable minimist
-cat > apps/web/app1/package.json << 'EOF'
-{
-  "name": "@test/app1",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Test app 1 - E-commerce frontend",
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "lodash": "4.17.19",
-    "axios": "^1.6.0",
-    "minimist": "1.2.5"
-  }
-}
-EOF
-
-pnpm install
-git add -A
-git commit -m "feat: add API client and CLI parser"
-git push -u origin test/mixed-dependencies
-```
-
-**Expected:**
-- ❌ CI FAILS
-- 🤖 Bot shows MULTIPLE vulnerabilities:
-  - lodash 4.17.19 (Prototype Pollution)
-  - minimist 1.2.5 (Prototype Pollution)
-- ✅ axios shows as safe (no warning)
-- 📊 Demonstrates handling multiple vulnerable packages
-- 🚫 Merge BLOCKED
-
----
-
-## 📊 Expected Results Summary
-
-| Test | Scenario | CI | Bot Comment | File Paths | Merge |
-|------|----------|-----|-------------|------------|-------|
-| 1 | Docs only | ✅ PASS | "No npm changes" | N/A | ✅ Yes |
-| 2 | Upgrade to vulnerable | ❌ FAIL | Vulnerability table | Shows both apps | ❌ No |
-| 3 | Upgrade to patched | ✅ PASS | "Scan PASSED" | N/A | ✅ Yes |
-| 4 | Mixed packages | ❌ FAIL | Multiple vulns | Shows locations | ❌ No |
-
----
-
-## 🎯 Why This Test Suite?
-
-### **Test 1: Skip Logic**
-- Validates scanner doesn't run on irrelevant changes
-- Saves CI time and resources
-- Prevents false positives
-
-### **Test 2: The Critical Test** ⭐
-- **Most important!** Catches incomplete security fixes
-- Real pattern: Developer upgrades but not far enough
-- Example: Django 5.1.4 → 5.1.10 (needs 5.1.15)
-- Shows your scanner catches this dangerous pattern!
-
-### **Test 3: Success Path**
-- Validates scanner passes on secure code
-- Shows proper fix workflow
-- Demonstrates no false positives
-
-### **Test 4: Complex Scenarios**
-- Multiple vulnerable packages
-- Mixed safe/unsafe dependencies
-- Shows "Affected" column with workspace names
-- Demonstrates production-level scanning
-
----
-
-## ⚙️ Scanner Features Demonstrated
-
-✅ **File Change Detection**
-- Triggers on package.json, lockfile changes
-- Skips on docs, code, config changes
-
-✅ **Vulnerability Detection**
-- Catches all severity levels (CRITICAL, HIGH, MODERATE)
-- Multiple CVEs per package
-- Multiple vulnerable packages
-
-✅ **Beautiful Reporting**
-- Grouped by severity with emojis
-- **NEW: "Affected" column shows which workspaces**
-- Clickable CVE links
-- Fix instructions
-- Configuration summary
-
-✅ **Smart Comments**
-- Updates existing comments (no spam)
-- Hidden bot marker for identification
-- Run ID for tracing back to CI logs
-
-✅ **CI Integration**
-- Fails on MODERATE+ vulnerabilities
-- Passes on clean code
-- Blocks dangerous PRs from merging
-
----
-
-## 🚀 Quick Start
-
-```bash
-# Run all 4 tests in sequence
-./run-all-tests.sh
-
-# Or run individually as shown above
+# Expected: ✅ CI passes, bot updates comment
 ```
 
 ---
 
-## 📖 What Gets Scanned?
+## 📦 What Gets Scanned
 
-The scanner runs when these files change:
-- `**/package.json` - Direct dependencies
-- `**/pnpm-lock.yaml` - Resolved versions
-- `pnpm-workspace.yaml` - Workspace config
+### npm/pnpm Scanner
+- **Tool**: `pnpm audit` or `npm audit`
+- **Triggers on**: `package.json`, `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`
+- **Script**: `.github/scripts/process-npm-audit.py`
 
-Changes to other files skip the scan entirely.
+### Python Scanner  
+- **Tool**: `pip-audit`
+- **Triggers on**: `requirements.txt`, `pyproject.toml`, `uv.lock`, `poetry.lock`
+- **Works with**: pip, uv, poetry
+- **Script**: `.github/scripts/process-python-audit.py`
+
+### Go Scanner
+- **Tool**: `govulncheck` (official Go vulnerability scanner)
+- **Triggers on**: `go.mod`, `go.sum`
+- **Script**: `.github/scripts/process-go-audit.py`
 
 ---
 
 ## 🔧 Configuration
 
+### Adjust Severity Threshold
+
+Edit `.github/workflows/vulnerability-scan.yml`:
+
 ```yaml
-# In .github/workflows/tests.yml
-MIN_FAIL_SEVERITY: MODERATE
+env:
+  MIN_FAIL_SEVERITY: MODERATE  # Options: CRITICAL, HIGH, MODERATE, LOW, INFO
+```
 
-Fails CI on:
-- CRITICAL (🔴)
-- HIGH (🟠)
-- MODERATE (🟡)
+**Recommendations**:
+- **Production apps**: `MODERATE` (balanced - current default)
+- **Security-critical**: `LOW` (strict)
+- **Internal tools**: `HIGH` (lenient)
 
-Warns but allows:
-- LOW (🔵)
-- INFO (ℹ️)
+### Change Scan Schedule
+
+```yaml
+schedule:
+  # Current: Weekly Monday 3 AM UTC
+  - cron: '0 3 * * 1'
+  
+  # Daily at 3 AM UTC
+  - cron: '0 3 * * *'
+  
+  # Bi-weekly (1st and 15th)
+  - cron: '0 3 1,15 * *'
+```
+
+### Disable Unused Scanners
+
+Comment out scanners you don't need:
+
+```yaml
+jobs:
+  scan-npm-vulnerabilities:
+    # Keep this
+    
+  # scan-python-vulnerabilities:
+  #   # Disabled - no Python in this project
+    
+  # scan-go-vulnerabilities:
+  #   # Disabled - no Go in this project
+```
+
+### Update Tool Versions
+
+```yaml
+# Node.js version
+- uses: actions/setup-node@v4
+  with:
+    node-version: '20'  # Change to: 18, 20, 22
+
+# Python version
+- uses: actions/setup-python@v5
+  with:
+    python-version: '3.11'  # Change to: 3.9, 3.10, 3.11, 3.12
+
+# Go version
+- uses: actions/setup-go@v5
+  with:
+    go-version: '1.21'  # Change to: 1.20, 1.21, 1.22
 ```
 
 ---
 
-## 📈 Version Pattern Demonstrated
+## 🧪 Testing Scenarios
 
-```
-Current:  lodash 4.17.19 (CVE-2020-8203)      ← Vulnerable base
-Upgrade:  lodash 4.17.20 (STILL VULNERABLE!)  ← Test 2 catches this!
-Required: lodash 4.17.21 (PATCHED)            ← Test 3 validates this
+### Test 1: Skip Scan (Non-Dependency Change)
+```bash
+# Make a documentation change
+echo "# Test" >> README.md
+git add README.md
+git commit -m "docs: test"
+git push
+
+# Expected: ✅ Scanner skips (no dependency files changed)
 ```
 
-**This mirrors Django, Rails, or any framework's security upgrade pattern.**
+### Test 2: npm - Vulnerable Package
+```bash
+# Add vulnerable lodash
+pnpm add lodash@4.17.19
+
+git add package.json pnpm-lock.yaml
+git commit -m "test: vulnerable lodash"
+git push
+
+# Expected: ❌ CI fails, bot shows CVE-2020-8203
+```
+
+### Test 3: npm - Incomplete Fix
+```bash
+# Upgrade but not enough
+pnpm update lodash@4.17.20  # Still vulnerable!
+
+git add package.json pnpm-lock.yaml
+git commit -m "chore: upgrade lodash"
+git push
+
+# Expected: ❌ Still fails - proves scanner catches incomplete fixes
+```
+
+### Test 4: npm - Complete Fix
+```bash
+# Upgrade to patched version
+pnpm update lodash@4.17.21
+
+git add package.json pnpm-lock.yaml
+git commit -m "fix: upgrade to patched lodash"
+git push
+
+# Expected: ✅ CI passes, bot shows success
+```
+
+### Test 5: Python - Vulnerable Package
+```bash
+# Create requirements.txt with vulnerable package
+echo "django==2.2.0" > requirements.txt
+
+git add requirements.txt
+git commit -m "test: vulnerable django"
+git push
+
+# Expected: ❌ CI fails with Django vulnerabilities
+```
+
+### Test 6: Go - Vulnerable Module
+```bash
+# Create go.mod with vulnerable package
+cat > go.mod << 'EOF'
+module github.com/test/app
+
+go 1.21
+
+require golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
+EOF
+
+go mod tidy
+
+git add go.mod go.sum
+git commit -m "test: vulnerable go crypto"
+git push
+
+# Expected: ❌ CI fails with Go vulnerability
+```
+
+### Test 7: Scheduled Scan (Manual Trigger)
+```bash
+# Trigger weekly scan manually
+gh workflow run vulnerability-scan.yml
+
+# Wait 2-3 minutes, then check
+gh issue list --label "security,vulnerabilities"
+
+# Expected: Issue created if vulnerabilities found
+```
 
 ---
 
-**Ready to test?** Run the scenarios above and watch your scanner in action! 🎉
+## 📊 Sample Output
+
+### PR Comment Example
+```markdown
+## 🚨 npm Vulnerability Scan: FAILED
+
+**❌ Found 1 vulnerability that must be fixed** (>= Moderate severity)
+
+---
+
+### 🟠 High Severity (1)
+
+| Package | Current | Fixed | CVE | Details |
+|---------|---------|-------|-----|---------|
+| `lodash` | 4.17.19 | >=4.17.21 | CVE-2020-8203 | Prototype Pollution |
+
+---
+
+### 🔧 How to Fix
+
+1. Update the vulnerable package:
+   ```bash
+   pnpm update lodash@4.17.21
+   ```
+
+2. Regenerate lockfiles:
+   ```bash
+   pnpm install
+   ```
+
+3. Test your changes:
+   ```bash
+   pnpm build && pnpm test
+   ```
+
+4. Push and re-run CI
+```
+
+### GitHub Issue Example (Weekly Scan)
+```markdown
+## 🚨 Weekly Vulnerability Scan: Issues Detected
+
+Found **2** total vulnerabilities across all package managers.
+
+### 📊 Summary
+- 📦 npm/pnpm: 2 vulnerabilities
+- 🐍 Python: 0 vulnerabilities
+- 🔷 Go: 0 vulnerabilities
+
+### 🔧 Next Steps
+1. Review vulnerabilities in workflow logs
+2. Create PRs to upgrade packages
+3. Close this issue once resolved
+```
+
+---
+
+## 🎨 Severity Levels
+
+| Icon | Level | CI Behavior (default) |
+|------|-------|-----------------------|
+| 🔴 | CRITICAL | Fails CI ❌ |
+| 🟠 | HIGH | Fails CI ❌ |
+| 🟡 | MODERATE | Fails CI ❌ |
+| 🔵 | LOW | Passes (warning) ✅ |
+| ℹ️ | INFO | Passes (warning) ✅ |
+
+---
+
+## 📁 Project Structure
+
+```
+your-repo/
+├── .github/
+│   ├── workflows/
+│   │   └── vulnerability-scan.yml    # Main workflow
+│   └── scripts/
+│       ├── process-npm-audit.py      # npm/pnpm scanner
+│       ├── process-python-audit.py   # Python scanner
+│       └── process-go-audit.py       # Go scanner
+│
+└── README.md                         # This file
+```
+
+---
+
+## 🚨 Troubleshooting
+
+### Scanner Not Running?
+**Check if dependency files changed**:
+```bash
+git diff origin/main...HEAD -- '**/package.json' '**/requirements.txt' '**/go.mod'
+```
+
+### Bot Not Commenting?
+**Verify permissions** in workflow file:
+```yaml
+permissions:
+  pull-requests: write  # Required!
+```
+
+**Check PR number is set**:
+```bash
+gh pr view --json number
+```
+
+### Too Many Failures?
+**Adjust severity threshold** to be less strict:
+```yaml
+MIN_FAIL_SEVERITY: HIGH  # Only fail on HIGH and CRITICAL
+```
+
+### Scan Takes Too Long?
+**Disable unused scanners** - Comment out jobs you don't use
+
+**Add caching**:
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: ~/.pnpm-store
+    key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+```
+
+### False Positives?
+**Ignore specific vulnerabilities**:
+
+For npm/pnpm, add to `package.json`:
+```json
+{
+  "pnpm": {
+    "overrides": {
+      "vulnerable-package": "safe-version"
+    }
+  }
+}
+```
+
+For Python:
+```bash
+pip-audit --ignore-vuln CVE-XXXX-XXXXX
+```
+
+For Go:
+```go
+// In go.mod
+replace vulnerable.com/package => safe.com/package v1.0.0
+```
+
+---
+
+## 🔍 How It Works
+
+### On Pull Requests
+1. **Detects changes** in dependency files
+2. **Skips if no changes** (saves CI time)
+3. **Runs appropriate scanner** (npm/Python/Go)
+4. **Posts/updates PR comment** with results
+5. **Fails CI** if vulnerabilities >= threshold
+
+### On Schedule (Weekly)
+1. **Runs Monday 3 AM UTC** on main branch
+2. **Scans all three** package managers
+3. **Creates GitHub issue** if vulnerabilities found
+4. **Uploads results** as artifacts (30-day retention)
+
+---
+
+## ⚙️ Advanced Configuration
+
+### Different Thresholds per Scanner
+```yaml
+# Strict for npm
+scan-npm-vulnerabilities:
+  env:
+    MIN_FAIL_SEVERITY: LOW
+
+# Moderate for Python
+scan-python-vulnerabilities:
+  env:
+    MIN_FAIL_SEVERITY: MODERATE
+
+# Lenient for Go
+scan-go-vulnerabilities:
+  env:
+    MIN_FAIL_SEVERITY: HIGH
+```
+
+### Custom File Patterns
+```yaml
+- name: Check for npm changes
+  uses: tj-actions/changed-files@v46
+  with:
+    files: |
+      **/package.json
+      **/pnpm-lock.yaml
+      **/.npmrc           # Add custom patterns
+```
+
+### Add Team Mentions
+Edit scanner scripts (`generate_pr_comment()` function):
+```python
+comment = f"""{BOT_MARKER}
+## 🚨 npm Vulnerability Scan: FAILED
+
+@security-team please review
+
+**❌ Found {fail_count} vulnerabilities**
+"""
+```
+
+---
+
+## 📈 Best Practices
+
+### For Development Teams
+1. ✅ Address alerts within 48 hours
+2. ✅ Keep dependencies updated regularly
+3. ✅ Test fixes thoroughly before merging
+4. ✅ Use Dependabot for automatic updates
+
+### For Security Teams
+1. ✅ Start with MODERATE threshold, adjust based on feedback
+2. ✅ Monitor trends over time
+3. ✅ Review scheduled scan results weekly
+4. ✅ Document accepted exceptions
+
+### For Platform Teams
+1. ✅ Update scanner tools quarterly
+2. ✅ Cache dependencies for faster CI
+3. ✅ Provide team training (15-min overview)
+4. ✅ Track metrics (scan duration, fix time)
+
+---
+
+## 📊 Changelog
+
+### Version 2.0.0 (December 9, 2024)
+- ✨ Added multi-language support (npm, Python, Go)
+- ✨ Added scheduled weekly scans
+- ✨ Added GitHub issue creation
+- ✨ Parallel scanner execution
+- ✨ Smart change detection
+- 📝 Comprehensive documentation
+- 🔧 Configurable severity thresholds
+
+### Version 1.0.0 (December 1, 2024)
+- 🎉 Initial release with npm scanning only
+
+---
+
+## 🤝 Contributing
+
+Improvements welcome! Areas to enhance:
+- Additional package managers (Rust, Ruby, etc.)
+- Custom severity rules per package
+- Integration with other security tools
+- Better severity normalization
+
+---
+
+## 📚 Resources
+
+### Tools Used
+- [pnpm audit](https://pnpm.io/cli/audit) - npm/pnpm vulnerability scanning
+- [npm audit](https://docs.npmjs.com/cli/audit) - npm vulnerability scanning
+- [pip-audit](https://github.com/pypa/pip-audit) - Python vulnerability scanning
+- [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) - Go vulnerability scanning
+- [GitHub Actions](https://docs.github.com/en/actions) - CI/CD automation
+- [GitHub CLI](https://cli.github.com/) - Comment and issue management
+
+### Security Resources
+- [National Vulnerability Database](https://nvd.nist.gov/)
+- [npm Security Advisories](https://www.npmjs.com/advisories)
+- [Python Security](https://python.org/dev/security/)
+- [Go Vulnerability Database](https://vuln.go.dev/)
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+
+---
+
+## ✅ Deployment Checklist
+
+- [ ] Copy workflow file to `.github/workflows/`
+- [ ] Copy scanner scripts to `.github/scripts/`
+- [ ] Make scripts executable (`chmod +x`)
+- [ ] Configure Node.js/Python/Go versions
+- [ ] Set severity thresholds
+- [ ] Disable unused scanners (optional)
+- [ ] Push to GitHub
+- [ ] Test with vulnerable package PR
+- [ ] Verify bot comments work
+- [ ] Test scheduled scan (manual trigger)
+- [ ] Train team on responding to alerts
+
+---
+
+## 🎉 Summary
+
+You now have a production-ready vulnerability scanner that:
+- ✅ Scans npm/pnpm, Python (pip/uv/poetry), and Go
+- ✅ Posts detailed PR comments with fix instructions
+- ✅ Blocks vulnerable code from merging
+- ✅ Monitors main branch weekly
+- ✅ Creates GitHub issues for security alerts
+- ✅ Saves CI time with smart change detection
+
+---
+
+## 📞 Quick Reference
+
+```bash
+# Deploy
+cp vulnerability-scan.yml .github/workflows/
+cp .github/scripts/*.py .github/scripts/
+chmod +x .github/scripts/*.py
+
+# Test locally
+pnpm audit --json          # npm/pnpm
+pip-audit --format json    # Python
+govulncheck -json ./...    # Go
+
+# Trigger manually
+gh workflow run vulnerability-scan.yml
+
+# View results
+gh run list --workflow=vulnerability-scan.yml
+gh pr view <number> --comments
+gh issue list --label "security"
+```
+
+---
+
+**Project**: GitHub Vulnerabilities Detection  
+**Version**: 2.0.0  
+**License**: Open Source  
+**Created**: December 9, 2024
+
+*Built with ❤️ for secure software development*
