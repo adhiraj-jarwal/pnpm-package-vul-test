@@ -1,4 +1,3 @@
-# Python dependencies with known vulnerabilities for testing
-django==2.2.0
+# Python dependencies - partial security fix
+django==4.2.0
 requests==2.25.0
-
