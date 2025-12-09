@@ -16,12 +16,6 @@
     "test:npm": "pnpm audit",
     "test:python": "pip-audit --format json || true",
     "test:go": "govulncheck ./... || true"
-  },
-  "pnpm": {
-    "overrides": {
-      "lodash": "4.17.19",
-      "minimist": "1.2.0"
-    }
   }
 }
 

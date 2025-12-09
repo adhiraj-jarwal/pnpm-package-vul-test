@@ -4,10 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  lodash: 4.17.19
-  minimist: 1.2.0
-
 importers:
 
   .: {}
