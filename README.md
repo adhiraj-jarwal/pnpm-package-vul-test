@@ -92,9 +92,37 @@ git push
 
 ## 🔧 Configuration
 
-### Adjust Severity Threshold
+### Monitoring vs Enforcement Mode
 
-Edit `.github/workflows/vulnerability-scan.yml`:
+**DEFAULT: Monitoring Mode** (Production-Safe)
+
+```yaml
+env:
+  ENFORCE_VULNERABILITIES: false  # Posts comments, NEVER fails CI ✅
+```
+
+In **monitoring mode**:
+- ✅ Scanner runs and detects vulnerabilities
+- ✅ Posts detailed bot comments on PRs
+- ✅ **CI always passes** (never blocks merges)
+- Use for initial rollout, team training, data collection
+
+**To enable enforcement** (blocks vulnerable PRs):
+
+```yaml
+env:
+  ENFORCE_VULNERABILITIES: true  # Posts comments AND fails CI ❌
+```
+
+In **enforcement mode**:
+- Scanner detects vulnerabilities
+- Posts bot comments
+- **CI fails** if vulnerabilities >= threshold
+- Blocks vulnerable PRs from merging
+
+---
+
+### Adjust Severity Threshold
 
 ```yaml
 env:
@@ -105,6 +133,8 @@ env:
 - **Production apps**: `MODERATE` (balanced - current default)
 - **Security-critical**: `LOW` (strict)
 - **Internal tools**: `HIGH` (lenient)
+
+**Note**: Only matters in enforcement mode. In monitoring mode, all vulnerabilities are reported but never fail CI.
 
 ### Change Scan Schedule
 
