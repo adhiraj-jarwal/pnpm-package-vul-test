@@ -448,7 +448,10 @@ def main():
     print("🔍 Processing Go vulnerability scan results...\n")
     
     min_fail_severity = get_min_fail_severity()
+    enforce_vulnerabilities = os.getenv('ENFORCE_VULNERABILITIES', 'false').lower() == 'true'
+    
     print(f"📋 Configuration: MIN_FAIL_SEVERITY = {min_fail_severity}")
+    print(f"📋 Configuration: ENFORCE_VULNERABILITIES = {enforce_vulnerabilities}")
     
     audit_data = load_audit_results()
     vulnerabilities = parse_vulnerabilities(audit_data)
@@ -460,10 +463,16 @@ def main():
     post_pr_comment(comment)
     
     if fail_vulns:
-        print(f"\n❌ FAILURE: Found {len(fail_vulns)} Go vulnerabilit{'y' if len(fail_vulns) == 1 else 'ies'} >= {min_fail_severity}")
+        print(f"\n⚠️  Found {len(fail_vulns)} Go vulnerabilit{'y' if len(fail_vulns) == 1 else 'ies'} >= {min_fail_severity}")
         print(f"ℹ️  Found {len(warn_vulns)} additional lower-severity vulnerabilities (informational)")
-        print("CI will fail to prevent merging vulnerable dependencies")
-        sys.exit(1)
+        
+        if enforce_vulnerabilities:
+            print("❌ ENFORCEMENT MODE: CI will fail to prevent merging vulnerable dependencies")
+            sys.exit(1)
+        else:
+            print("⚠️  MONITORING MODE: CI will pass but vulnerabilities should be addressed")
+            print("💡 Set ENFORCE_VULNERABILITIES=true to block PRs with vulnerabilities")
+            sys.exit(0)
     elif warn_vulns:
         print(f"\n⚠️  WARNING: Found {len(warn_vulns)} Go vulnerabilit{'y' if len(warn_vulns) == 1 else 'ies'} below {min_fail_severity} threshold")
         print("CI will pass but vulnerabilities should be addressed")
