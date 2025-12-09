@@ -31,21 +31,30 @@ def load_audit_results() -> Dict[str, Any]:
             
             # Try single JSON object first
             try:
-                return json.loads(content)
+                result = json.loads(content)
+                # Ensure it's a dict
+                if isinstance(result, dict):
+                    return result
+                # If it's not a dict, treat as NDJSON
             except json.JSONDecodeError:
-                # Handle NDJSON format (multiple JSON objects, one per line)
-                vulns = []
-                for line in content.split('\n'):
-                    if line.strip():
-                        try:
-                            obj = json.loads(line)
-                            # govulncheck outputs different message types
-                            # We only care about "finding" type which contains vulnerability data
-                            if obj.get('finding'):
-                                vulns.append(obj['finding'])
-                        except json.JSONDecodeError:
+                pass
+            
+            # Handle NDJSON format (multiple JSON objects, one per line)
+            vulns = []
+            for line in content.split('\n'):
+                if line.strip():
+                    try:
+                        obj = json.loads(line)
+                        # Skip if not a dictionary
+                        if not isinstance(obj, dict):
                             continue
-                return {'Vulns': vulns}
+                        # govulncheck outputs different message types
+                        # We only care about "finding" type which contains vulnerability data
+                        if obj.get('finding'):
+                            vulns.append(obj['finding'])
+                    except json.JSONDecodeError:
+                        continue
+            return {'Vulns': vulns}
     except FileNotFoundError:
         print("❌ Error: go-audit-results.json not found")
         sys.exit(1)
