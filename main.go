@@ -2,17 +2,12 @@ package main
 
 import (
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/text/language"
+	
+	// Importing vulnerable packages to trigger govulncheck
+	_ "golang.org/x/crypto/salsa20/salsa"
+	_ "golang.org/x/text/language"
 )
 
 func main() {
-	// Using vulnerable crypto package
-	hash, _ := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)
-	fmt.Println("Hash:", string(hash))
-	
-	// Using vulnerable text package
-	tag := language.English
-	fmt.Println("Language:", tag)
+	fmt.Println("Test application for vulnerability scanning")
 }
-
