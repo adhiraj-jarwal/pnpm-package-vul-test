@@ -269,8 +269,8 @@ These vulnerabilities don't block CI but should be addressed when possible.
 **1. Update the vulnerable packages:**
 
 ```bash
-pip install --upgrade <package-name>==<fixed-version>
-# or for specific versions
+pip install --upgrade <package-name>==<fixed-version> # or for specific versions
+
 pip install <package-name>==<fixed-version>
 ```
 

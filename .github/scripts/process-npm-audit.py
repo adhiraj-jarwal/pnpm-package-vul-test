@@ -286,11 +286,11 @@ These vulnerabilities don't block CI but should be addressed when possible.
 pnpm update <package-name>@<fixed-version>
 
 # For transitive dependencies, add overrides to root package.json:
-# "pnpm": {{
-#   "overrides": {{
-#     "<package-name>": "<fixed-version>"
-#   }}
-# }}
+"pnpm": {{
+  "overrides": {{
+    "<package-name>": "<fixed-version>"
+  }}
+}}
 ```
 
 **2. Regenerate lockfile:**
