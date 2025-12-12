@@ -29,37 +29,56 @@ def load_audit_results() -> Dict[str, Any]:
             if not content:
                 return {'Vulns': []}
             
-            # Try single JSON object first
-            try:
-                result = json.loads(content)
-                # Ensure it's a dict
-                if isinstance(result, dict):
-                    return result
-                # If it's not a dict, treat as NDJSON
-            except json.JSONDecodeError:
-                pass
+            # Parse NDJSON format and collect both OSV details and findings
+            osvs = {}  # Map of OSV ID to full OSV object
+            findings = []
             
-            # Handle NDJSON format (multiple JSON objects, one per line)
-            vulns = []
-            for line in content.split('\n'):
-                if line.strip():
-                    try:
-                        obj = json.loads(line)
-                        # Skip if not a dictionary
-                        if not isinstance(obj, dict):
-                            continue
-                        # govulncheck outputs different message types
-                        # We only care about "finding" type which contains vulnerability data
-                        if obj.get('finding'):
-                            vulns.append(obj['finding'])
-                    except json.JSONDecodeError:
+            # Split by "}\n{" to separate objects
+            # Add back the braces
+            objects_text = content.replace('}\n{', '}||SPLIT||{')
+            object_strings = objects_text.split('||SPLIT||')
+            
+            for obj_str in object_strings:
+                try:
+                    obj = json.loads(obj_str)
+                    if not isinstance(obj, dict):
                         continue
+                    
+                    # Collect OSV vulnerability details
+                    if 'osv' in obj and isinstance(obj['osv'], dict):
+                        osv_data = obj['osv']
+                        osv_id = osv_data.get('id')
+                        if osv_id:
+                            osvs[osv_id] = osv_data
+                    
+                    # Collect findings (references to vulnerabilities)
+                    if 'finding' in obj:
+                        findings.append(obj['finding'])
+                except json.JSONDecodeError as e:
+                    # Skip invalid JSON objects
+                    continue
+            
+            # Merge findings with their OSV details
+            vulns = []
+            for finding in findings:
+                osv_id = finding.get('osv')
+                if osv_id and osv_id in osvs:
+                    # Merge finding with OSV details
+                    vuln = {
+                        **finding,
+                        'OSV': osvs[osv_id],
+                        'id': osv_id
+                    }
+                    vulns.append(vuln)
+            
             return {'Vulns': vulns}
     except FileNotFoundError:
         print("❌ Error: go-audit-results.json not found")
         sys.exit(1)
     except Exception as e:
         print(f"❌ Error loading audit results: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 def get_min_fail_severity() -> str:
@@ -81,48 +100,35 @@ def parse_vulnerabilities(audit_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         print("✅ No vulnerabilities found in Go modules")
         return []
     
+    print(f"📦 Processing {len(vulns)} vulnerabilities...")
+    
     for vuln in vulns:
-        # Extract package and module info
-        module_path = vuln.get('ModulePath', vuln.get('module', 'unknown'))
-        package_path = vuln.get('PkgPath', vuln.get('package', module_path))
+        # Extract from trace (first element contains the vulnerable module)
+        trace = vuln.get('trace', [])
+        if not trace:
+            continue
+            
+        first_trace = trace[0]
+        module_path = first_trace.get('module', 'unknown')
+        current_version = first_trace.get('version', 'unknown')
         
-        # Get OSV (Open Source Vulnerability) details
+        # Package path is same as module for Go
+        package_path = module_path
+        
+        # Get OSV details
         osv = vuln.get('OSV', {})
+        vuln_id = osv.get('id', vuln.get('id', vuln.get('osv', 'UNKNOWN')))
+        summary = osv.get('summary', osv.get('details', 'No description available'))
         
-        vuln_id = osv.get('id', vuln.get('ID', 'UNKNOWN'))
-        summary = osv.get('summary', vuln.get('Details', 'No description available'))
+        # Get fixed version from finding
+        patched_version = vuln.get('fixed_version', 'No fix available')
         
-        # Get current version
-        current_version = vuln.get('CurrentVersion', vuln.get('found_version', 'unknown'))
-        
-        # Get fixed version
-        fixed = osv.get('fixed', vuln.get('FixedVersion', ''))
-        if fixed:
-            patched_version = f">={fixed}"
-        else:
-            # Try to extract from affected ranges
-            affected = osv.get('affected', [])
-            if affected and len(affected) > 0:
-                ranges = affected[0].get('ranges', [])
-                if ranges and len(ranges) > 0:
-                    events = ranges[0].get('events', [])
-                    for event in events:
-                        if 'fixed' in event:
-                            patched_version = f">={event['fixed']}"
-                            break
-                    else:
-                        patched_version = "No fix available"
-                else:
-                    patched_version = "No fix available"
-            else:
-                patched_version = "No fix available"
-        
-        # Map severity (govulncheck doesn't always provide severity)
-        # We infer from database severity or default to MODERATE
-        raw_severity = osv.get('database_specific', {}).get('severity', 'MODERATE')
+        # Map severity from OSV database_specific or default to MODERATE
+        db_specific = osv.get('database_specific', {})
+        raw_severity = db_specific.get('severity', 'MODERATE')
         raw_severity = str(raw_severity).upper()
         
-        # Map common severity terms
+        # Normalize severity
         if 'CRITICAL' in raw_severity or 'SEVERE' in raw_severity:
             normalized_severity = 'CRITICAL'
         elif 'HIGH' in raw_severity:
@@ -132,40 +138,32 @@ def parse_vulnerabilities(audit_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         elif 'LOW' in raw_severity:
             normalized_severity = 'LOW'
         else:
-            normalized_severity = 'MODERATE'  # Default to MODERATE for Go
+            normalized_severity = 'MODERATE'  # Default for Go
         
-        # Get URL
-        url = ''
-        references = osv.get('references', [])
-        for ref in references:
-            if ref.get('type') == 'ADVISORY' or ref.get('type') == 'WEB':
-                url = ref.get('url', '')
+        # Get URL (prefer Go vulnerability database)
+        url = f'https://vuln.go.dev/ID/{vuln_id}'
+        
+        # Get CVE from aliases
+        aliases = osv.get('aliases', [])
+        cve = vuln_id  # Default to GO-ID
+        for alias in aliases:
+            if alias.startswith('CVE-'):
+                cve = alias
                 break
-        if not url:
-            url = f'https://pkg.go.dev/vuln/{vuln_id}'
         
-        # Get affected files (go.mod location)
-        affected_paths = []
-        if os.path.exists('go.mod'):
-            affected_paths.append('go.mod')
-        
-        # Check if vulnerability is actually called (more severe if called)
-        is_called = vuln.get('IsCalled', vuln.get('called', False))
-        if is_called and normalized_severity == 'MODERATE':
-            # Upgrade severity if vulnerability is actually used in code
-            normalized_severity = 'HIGH'
+        # Check if vulnerability is called in code (from trace length)
+        is_called = len(trace) > 1  # If trace has more than one element, code actually uses it
         
         vulnerabilities.append({
-            'package': package_path,
             'module': module_path,
+            'package': package_path,
             'current_version': current_version,
             'patched_version': patched_version,
             'severity': normalized_severity,
-            'cve': vuln_id,
+            'cve': cve,
             'title': summary,
             'url': url,
-            'affected_paths': affected_paths,
-            'is_called': is_called,
+            'is_called': is_called
         })
     
     return vulnerabilities
