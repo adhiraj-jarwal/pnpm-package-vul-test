@@ -5,3 +5,9 @@ vulnerability-comment.md
 audit-report.txt
 issue-body.md
 
+
+# CI artifacts
+go-audit-results.json
+npm-audit-results.json
+python-audit-results.json
+vulnerability-comment.md
