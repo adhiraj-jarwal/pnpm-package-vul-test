@@ -264,9 +264,6 @@ def generate_pr_comment(
 ## ✅ Go Vulnerability Scan: PASSED
 
 No vulnerabilities detected in Go modules.
-
----
-*🤖 Automated scan by {workflow_name} • Run: {run_id}*
 """
     
     # Failure / warning case
@@ -322,37 +319,35 @@ These vulnerabilities don't block CI but should be addressed when possible.
 
 ### 🔧 How to Fix
 
-1. **Update the vulnerable modules:**
-   ```bash
-   # Update specific module
-   go get <module-path>@<fixed-version>
-   
-   # Update all modules to latest
-   go get -u ./...
-   
-   # Tidy dependencies
-   go mod tidy
-   ```
+**1. Update the vulnerable modules:**
 
-2. **Verify fixes:**
-   ```bash
-   # Re-run vulnerability scan
-   govulncheck ./...
-   
-   # Run tests
-   go test ./...
-   ```
+```bash
+# Update specific module
+go get <module-path>@<fixed-version>
 
-3. **Push and re-run CI**
+# Or update all modules
+go get -u ./...
 
-### ℹ️ Need Help?
+# Tidy dependencies
+go mod tidy
+```
 
-- 📖 [Go security policy](https://go.dev/security/)
-- 🔍 [Go vulnerability database](https://vuln.go.dev/)
-- 🔗 Check CVE links above for details
-- 💬 Ask in #engineering-help
+**2. Test and push:**
 
-### 🎛️ Scanner Configuration
+```bash
+# Verify fix
+govulncheck ./...
+
+# Run tests
+go test ./...
+
+# Push changes
+git add go.mod go.sum
+git commit -m "fix: update vulnerable Go dependencies"
+git push
+```
+
+### 📊 Scanner Configuration
 
 - **Minimum fail severity:** {min_fail_severity.title()}
 - **Total vulnerabilities:** {total_count}
@@ -360,10 +355,6 @@ These vulnerabilities don't block CI but should be addressed when possible.
 - **Informational:** {warn_count}
 
 **Note:** Vulnerabilities marked as "Used in Code: ✅ Yes" are actually called in your codebase and should be prioritized.
-
----
-
-*🤖 Automated scan by {workflow_name} • Run: {run_id}*
 """
     
     return comment

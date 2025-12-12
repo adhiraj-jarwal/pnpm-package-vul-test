@@ -210,9 +210,6 @@ def generate_pr_comment(
 ## ✅ Python Vulnerability Scan: PASSED
 
 No vulnerabilities detected in Python dependencies.
-
----
-*🤖 Automated scan by {workflow_name} • Run: {run_id}*
 """
     
     # Failure / warning case
@@ -269,54 +266,35 @@ These vulnerabilities don't block CI but should be addressed when possible.
 
 ### 🔧 How to Fix
 
-1. **Update the vulnerable packages:**
-   ```bash
-   # For pip
-   pip install --upgrade <package-name>==<fixed-version>
-   
-   # For uv
-   uv pip install --upgrade <package-name>==<fixed-version>
-   
-   # For poetry
-   poetry update <package-name>
-   ```
+**1. Update the vulnerable packages:**
 
-2. **Regenerate lockfiles:**
-   ```bash
-   # For pip
-   pip freeze > requirements.txt
-   
-   # For uv
-   uv pip freeze > requirements.txt
-   
-   # For poetry
-   poetry lock
-   ```
+```bash
+pip install --upgrade <package-name>==<fixed-version>
+# or for specific versions
+pip install <package-name>==<fixed-version>
+```
 
-3. **Test your changes:**
-   ```bash
-   python -m pytest
-   # or your test command
-   ```
+**2. Update requirements.txt:**
 
-4. **Push and re-run CI**
+```bash
+pip freeze > requirements.txt
+```
 
-### ℹ️ Need Help?
+**3. Test and push:**
 
-- 📖 [Python security docs](https://python.org/dev/security/)
-- 🔍 Check CVE links above for details
-- 💬 Ask in #engineering-help
+```bash
+pytest  # or your test command
+git add requirements.txt
+git commit -m "fix: update vulnerable Python dependencies"
+git push
+```
 
-### 🎛️ Scanner Configuration
+### 📊 Scanner Configuration
 
 - **Minimum fail severity:** {min_fail_severity.title()}
 - **Total vulnerabilities:** {total_count}
 - **Failing CI:** {fail_count}
 - **Informational:** {warn_count}
-
----
-
-*🤖 Automated scan by {workflow_name} • Run: {run_id}*
 """
     
     return comment

@@ -221,9 +221,6 @@ def generate_pr_comment(
 ## ✅ npm Vulnerability Scan: PASSED
 
 No vulnerabilities detected in npm dependencies.
-
----
-*🤖 Automated scan by {workflow_name} • Run: {run_id}*
 """
     
     # Failure / warning case
@@ -282,48 +279,41 @@ These vulnerabilities don't block CI but should be addressed when possible.
 
 ### 🔧 How to Fix
 
-1. **Update the vulnerable packages:**
-   ```bash
-   # For direct dependencies in package.json
-   pnpm update <package-name>@<fixed-version>
-   
-   # For transitive dependencies, add to pnpm overrides in root package.json
-   # "pnpm": {{
-   #   "overrides": {{
-   #     "<package-name>": "<fixed-version>"
-   #   }}
-   # }}
-   ```
+**1. Update the vulnerable packages:**
 
-2. **Regenerate lockfiles:**
-   ```bash
-   pnpm install
-   ```
+```bash
+# For direct dependencies
+pnpm update <package-name>@<fixed-version>
 
-3. **Test your changes:**
-   ```bash
-   pnpm build
-   pnpm test
-   ```
+# For transitive dependencies, add overrides to root package.json:
+# "pnpm": {{
+#   "overrides": {{
+#     "<package-name>": "<fixed-version>"
+#   }}
+# }}
+```
 
-4. **Push and re-run CI**
+**2. Regenerate lockfile:**
 
-### ℹ️ Need Help?
+```bash
+pnpm install
+```
 
-- 📖 [npm security docs](https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities)
-- 🔍 Check CVE links above for details
-- 💬 Ask in #engineering-help
+**3. Test and push:**
 
-### 🎛️ Scanner Configuration
+```bash
+pnpm build && pnpm test
+git add pnpm-lock.yaml package.json
+git commit -m "fix: update vulnerable dependencies"
+git push
+```
+
+### 📊 Scanner Configuration
 
 - **Minimum fail severity:** {min_fail_severity.title()}
 - **Total vulnerabilities:** {total_count}
 - **Failing CI:** {fail_count}
 - **Informational:** {warn_count}
-
----
-
-*🤖 Automated scan by {workflow_name} • Run: {run_id} • [Docs](../../docs/ci-cd/npm-vulnerability-scanner.md)*
 """
     
     return comment
