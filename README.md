@@ -2,6 +2,8 @@
 
 **Multi-language vulnerability scanner for GitHub Actions**
 
+<!-- Testing: All 3 vulnerability scanners (npm, Python, Go) -->
+
 Automatically detect and block vulnerable dependencies in **npm/pnpm**, **Python (pip/uv/poetry)**, and **Go** projects.
 
 **Version**: 2.0.0 | **Updated**: December 9, 2024
