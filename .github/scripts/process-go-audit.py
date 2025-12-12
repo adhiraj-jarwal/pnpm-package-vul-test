@@ -351,8 +351,6 @@ git push
 - **Total vulnerabilities:** {total_count}
 - **Failing CI:** {fail_count}
 - **Informational:** {warn_count}
-
-**Note:** Vulnerabilities marked as "Used in Code: ✅ Yes" are actually called in your codebase and should be prioritized.
 """
     
     return comment
