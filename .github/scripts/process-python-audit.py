@@ -71,6 +71,12 @@ def parse_vulnerabilities(audit_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 # pip-audit uses: LOW, MODERATE, HIGH, CRITICAL
                 normalized_severity = raw_severity if raw_severity in SEVERITY_LEVELS else 'UNKNOWN'
                 
+                # Treat UNKNOWN severity as MODERATE (better safe than sorry)
+                # pip-audit often doesn't have severity data for Python vulnerabilities
+                # so we assume MODERATE to ensure they get proper attention
+                if normalized_severity == 'UNKNOWN':
+                    normalized_severity = 'MODERATE'
+                
                 title = vuln.get('description', vuln.get('summary', 'No description available'))
                 
                 # Get fixed versions
