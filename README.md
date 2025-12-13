@@ -78,7 +78,8 @@ git push
 - **Script**: `.github/scripts/process-npm-audit.py`
 
 ### Python Scanner  
-- **Tool**: `pip-audit`
+- **Tool**: `pip-audit` (installed via `uv` for speed)
+- **Package Manager**: `uv` (modern, fast Python package installer)
 - **Triggers on**: `requirements.txt`, `pyproject.toml`, `uv.lock`, `poetry.lock`
 - **Works with**: pip, uv, poetry
 - **Script**: `.github/scripts/process-python-audit.py`
