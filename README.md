@@ -2,6 +2,9 @@
 
 **Multi-language vulnerability scanner for GitHub Actions**
 
+> 🎯 **Demo PR**: This change only modifies documentation. No dependency files are touched.
+> Even though vulnerabilities exist in main, this PR should pass all checks.
+
 Automatically detect and block vulnerable dependencies in **npm/pnpm**, **Python (pip/uv/poetry)**, and **Go** projects.
 
 **Version**: 2.0.0 | **Updated**: December 9, 2024
