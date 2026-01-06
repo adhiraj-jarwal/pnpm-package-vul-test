@@ -19,57 +19,6 @@ Automatically detect and block vulnerable dependencies in **npm/pnpm**, **Python
 
 ---
 
-## ⚡ Quick Start (5 minutes)
-
-### 1. Copy Files
-```bash
-# Navigate to your repo
-cd /path/to/your/repository
-
-# Copy workflow
-mkdir -p .github/workflows
-cp vulnerability-scan.yml .github/workflows/
-
-# Copy scanner scripts
-mkdir -p .github/scripts
-cp .github/scripts/*.py .github/scripts/
-chmod +x .github/scripts/*.py
-```
-
-### 2. Test It
-```bash
-# Create test branch
-git checkout -b test/scanner
-
-# Add vulnerable npm package
-cd your-app-folder
-pnpm add lodash@4.17.19  # or: npm install lodash@4.17.19
-
-# Commit and push
-git add package.json *lock.yaml
-git commit -m "test: add vulnerable package"
-git push -u origin test/scanner
-
-# Create PR
-gh pr create --title "Test scanner" --body "Testing"
-
-# Expected: ❌ CI fails, bot posts comment with CVE-2020-8203
-```
-
-### 3. Fix It
-```bash
-# Upgrade to safe version
-pnpm update lodash@4.17.21  # or: npm install lodash@4.17.21
-
-git add package.json *lock.yaml
-git commit -m "fix: upgrade lodash"
-git push
-
-# Expected: ✅ CI passes, bot updates comment
-```
-
----
-
 ## 📦 What Gets Scanned
 
 ### npm/pnpm Scanner
@@ -516,32 +465,6 @@ comment = f"""{BOT_MARKER}
 
 ---
 
-## 📊 Changelog
-
-### Version 2.0.0 (December 9, 2024)
-- ✨ Added multi-language support (npm, Python, Go)
-- ✨ Added scheduled weekly scans
-- ✨ Added GitHub issue creation
-- ✨ Parallel scanner execution
-- ✨ Smart change detection
-- 📝 Comprehensive documentation
-- 🔧 Configurable severity thresholds
-
-### Version 1.0.0 (December 1, 2024)
-- 🎉 Initial release with npm scanning only
-
----
-
-## 🤝 Contributing
-
-Improvements welcome! Areas to enhance:
-- Additional package managers (Rust, Ruby, etc.)
-- Custom severity rules per package
-- Integration with other security tools
-- Better severity normalization
-
----
-
 ## 📚 Resources
 
 ### Tools Used
@@ -561,22 +484,6 @@ Improvements welcome! Areas to enhance:
 
 ---
 
-## ✅ Deployment Checklist
-
-- [ ] Copy workflow file to `.github/workflows/`
-- [ ] Copy scanner scripts to `.github/scripts/`
-- [ ] Make scripts executable (`chmod +x`)
-- [ ] Configure Node.js/Python/Go versions
-- [ ] Set severity thresholds
-- [ ] Disable unused scanners (optional)
-- [ ] Push to GitHub
-- [ ] Test with vulnerable package PR
-- [ ] Verify bot comments work
-- [ ] Test scheduled scan (manual trigger)
-- [ ] Train team on responding to alerts
-
----
-
 ## 🎉 Summary
 
 You now have a production-ready vulnerability scanner that:
@@ -588,34 +495,3 @@ You now have a production-ready vulnerability scanner that:
 - ✅ Saves CI time with smart change detection
 
 ---
-
-## 📞 Quick Reference
-
-```bash
-# Deploy
-cp vulnerability-scan.yml .github/workflows/
-cp .github/scripts/*.py .github/scripts/
-chmod +x .github/scripts/*.py
-
-# Test locally
-pnpm audit --json          # npm/pnpm
-pip-audit --format json    # Python
-govulncheck -json ./...    # Go
-
-# Trigger manually
-gh workflow run vulnerability-scan.yml
-
-# View results
-gh run list --workflow=vulnerability-scan.yml
-gh pr view <number> --comments
-gh issue list --label "security"
-```
-
----
-
-**Project**: GitHub Vulnerabilities Detection  
-**Version**: 2.0.0  
-**License**: Open Source  
-**Created**: December 9, 2024
-
-*Built with ❤️ for secure software development*
